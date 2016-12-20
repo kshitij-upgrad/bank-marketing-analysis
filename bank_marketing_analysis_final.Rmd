@@ -1,0 +1,531 @@
+---
+output:
+  word_document:
+    toc: yes
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+---
+# Bank Marketing Analysis
+#### Designing a Telemarketing Strategy To Reduce Acquisition Costs
+
+A bank sells a product (called term deposit) to prospects mainly through telemarketing. If a prospect customer buys the product, we say that he has 'responded'. 
+
+The aim of this analysis is to __reduce the marketing cost by atleast 50%__ and acquire a comparable number of customers (say 80-90%). 
+
+We'll use _telemarketing data_ from a past campaign of the bank. The sales team had recorded customer data like age, salary, whether he has a loan, house, the month of call etc. 
+
+The idea is to use machine learning to predict the likelihood of a person 'buying the product 'responding'. We'll identify those who are most likely to respond and telemarket only to them, thereby reducing the total cost of acquisition per customer.
+
+
+The standard process followed in analytics projects is:
+1. Business Understanding
+2. Data Understanding  
+3. Modelling
+4. Model Evaluation
+5. Model Deployment and Recommendations
+
+
+## Business Understanding
+
+
+The __overall goal__ is to reduce telemarketing costs by about 50% and acquire atleast 80-90% of the customers. 
+
+The specific __objective of this analysis__ is to build a __'response model'__ to predict the likelihood of a prospect buying the product (or responding). 
+
+
+## Data Understanding
+
+
+The datafile is named bank-marketing.csv. You can download it here: https://archive.ics.uci.edu/ml/datasets/Bank+Marketing
+
+```{r echo = F}
+bank_data <- read.csv("bank-marketing.csv")
+str(bank_data)
+```
+
+We have 45211 observations, i.e. we have data of 45211 potential customers. There are 20 variables (or 20 columns). We have two types of variables:
+
+1. Two type of attributes (or variables):
++ __Customer attributes__ like age, job, salary, marital (status), education (primary / secondary / tertiary) etc. 
++ __Bank related attributes__ like targeted (whether he/she was targeted before), loan (yes / no), contact (whether he/she has been contacted before etc.)
+
+The last attribute 'response' tells us whether the person had responded to the bank's marketing campaign. It thus contains only two values - Yes or No. It is called the __target attribute__ since that is what we want to predict using the other attributes.
+
+
+### Data Cleaning 
+#### Missing Values and Outliers
+We always start with cleaning the data i.e. removing the missing values, any erroneous entries etc. Let's see if this data contains __missing values__. 
+
+```{r}
+sum(is.na(bank_data))
+```
+
+We have simply summed up all the missing values (denoted as 'NA'). There are none of them, so we move ahead. 
+
+
+Next, we should ideally look at __outliers__ in the data. Outliers are extreme values for which treatment is done so that the data only represents the general trends and ignores extreme cases. For example, a person having an income of Rs 20 lacs per month will be an outlier in this dataset.
+
+For now, we will not do outlier treatment since this data doesn't have many of them.
+
+### Exploratory Analysis
+In Exploratory Data Analysis, or EDA, we use plots and summaries of data to understand the patterns in it. Let's see some examples. 
+
+#### Univariate Analysis
+In univariate analysis, we analyse one variable at a time.
+
+The following plot shows the distribution of peoples' ages in the data. The ggplot library is a great data visualisation tool in R.  
+
+Since age is a numeric variable, we plot a __histogram__.
+```{r}
+library(ggplot2)
+ggplot(bank_data, aes(age)) + geom_histogram()
+```
+
+You can see that most people are between 25-50 years old. Very few people older than 60 years have been targeted.    
+
+Next, let's look at the types of jobs people have. Now _job_ is not a numeric variable, it is a **categorical variable** and so we plot a __bar chart__ for it. 
+
+```{r}
+ggplot(bank_data, aes(job)) + geom_bar() + theme(axis.text.x = element_text(angle = 60, hjust = 1))
+```
+
+We have a large number of people with blue-collar jobs and in management, which are about 9000 each. The third highest category is technicians which are about 7500 people. Note that among 45,000 people, about 25,000 or 55% are either blue-collar workers, management employees technicians. 
+
+A very important variable for the bank would be __salary__. Let's have a look at the average and the median salary.
+
+```{r}
+summary(bank_data$salary)
+```
+
+The average salary is about INR 57000 per month. Note that the maximum is only about INR 1.2 lacs per month. 
+
+
+Let's now look at the summary of the target variable __response__. 
+```(r)
+summary(bank_data$response)
+```
+
+So out of about 45,000 people, only 5000 had responded. The exact __response rate__ ca calculated as:
+
+```{r echo = FALSE}
+response_rate <- 5289/45211
+response_rate
+```
+
+An 11.7% response rate means that if the you make 100 calls to market the product (term deposit), about 11.7% will subscribe for a term-deposit.  In marketing, 11.7% is a decently good rate.  
+
+#### Multivariate Analysis
+
+Now let's analyse two variables at a time, one of which should obviously be the target variable 'response'.
+
+```{r}
+ggplot(bank_data, aes(age, fill = factor(response))) + geom_histogram()
+```
+
+So now the plot shows information of two variables - the age on x-axis and response as a colour. This chart does not show any obvious trend of response rate with age. 
+
+The analysis will be easier if we could divide the age into __buckets__, e.g. 0-10 years, 10-20 years etc. This is called bucketing and is often done to divide __numeric variables__ into smaller buckets. 
+
+```{r}
+bank_data$buckets.age <- cut(bank_data$age, breaks = c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100))
+str(bank_data)
+sum(is.na(bank_data))
+```
+
+Note that a new variable named _buckets.age_ is now added to bank_data. Ages are now bucketed into this variable. 
+
+Let's use the buckets to see if age affects the response rate. 
+```{r}
+ggplot(bank_data, aes(buckets.age, fill = factor(response))) + geom_bar()
+```
+
+It will be easier if we could see the response rate in numbers as well. We can convert the 'yes-no' values to '1-0' respectively and then calculate the response rate by summing up the 1s. 
+
+```{r}
+bank_data$response.numeric <- ifelse(bank_data$response == "yes", 1, 0)
+str(bank_data)
+```
+
+We can now aggregate the 1s by each age bucket and see the response rates
+for each bucket. 
+
+```{r}
+agg_age <- aggregate(response.numeric ~ buckets.age, data = bank_data, mean)
+agg_age
+```
+
+Note that the bucket 10-20 has about 34% response rate; 20-30 has 16% etc. 
+The bucket 40-50 and 50-60 have low response rates (around 10%). 
+
+We can display the aggregate response rates in the plot as well. 
+
+```{r}
+ggplot(agg_age, aes(x = buckets.age, y = response.numeric)) + geom_bar(stat = 'identity')  
+```
+
+
+Similarly, we can measure the response rate with salary and jobs. 
+
+```{r}
+bank_data$buckets.salary <- cut(bank_data$salary, breaks = 10)
+agg_salary <- aggregate(response.numeric ~ buckets.salary, data = bank_data, mean)
+agg_salary
+ggplot(agg_salary, aes(x = buckets.salary, y = response.numeric)) + geom_bar(stat = 'identity')  
+```
+
+You can see that the response rate is highest for the lowest salary band. This might tell you something about the banking products you should be selling (which are used by people in this salary band.)
+
+Let's also compare response rates across various jobs.  
+
+```{r}
+agg_job <- aggregate(response.numeric~job, data = bank_data, mean)
+agg_job
+ggplot(agg_job, aes(job, response.numeric)) + geom_bar(stat = 'identity')
+```
+
+Interestingly, response rate is highest for students and second highest for retired people. It is quite low for blue-collar workers, housemaids and entrepreneurs. 
+
+Similarly, you can analyse response rates with other variables like education, marital status, loan etc. 
+
+But this way, we can only only analyse the effect of each variable separately. We saw that multiple attributes like age, salary etc. affect the reponse rate. How do we analyse the _combined effect_ of the variables? Also, how can we know which variables affect response rate more than others? 
+
+__Machine Learning__ helps us build __models__ which extract the patterns in the data. We'll see that in the next section.
+
+## Modelling
+
+Let's now build some machine learning models to predict the type of potential customers who are more likely to respond.
+
+To build machine learning models, we use only a part of the data to train the model. This is called __training data__. 
+
+Rest of the data is used to test or evaluate the model, which is called __test data__. 
+
+We'll use 70% data to train the model and the rest 30% to test it. 
+
+### Data Preparation
+
+```{r}
+library(caret)
+library(caTools)
+library(dummies)
+bank_data <- bank_data[, -c(20, 21, 22)]
+
+
+#creating dummy variables
+bank_data$response <- as.integer(bank_data$response)
+bank_data <- dummy.data.frame(bank_data)
+bank_data$response <- as.factor(ifelse(bank_data$response == 1, "no", "yes"))
+
+
+# splitting into train and test data
+set.seed(1)
+split_indices <- sample.split(bank_data$response, SplitRatio = 0.70)
+train <- bank_data[split_indices, ]
+test <- bank_data[!split_indices, ]
+nrow(train)/nrow(bank_data)
+nrow(test)/nrow(bank_data)
+```
+
+### Logistic Regression
+
+Let's build the first model - __logistic regression__. 
+
+```{r}
+library(MASS)
+library(car)
+logistic_1 <- glm(response ~ ., family = "binomial", data = train)
+summary(logistic_1)
+
+#stepAIC(logistic_1, direction = "both")
+# stepAIC has removed some variables and only the following ones remain
+logistic_2 <- glm(formula = response ~ jobadmin. + jobhousemaid + jobmanagement + 
+    jobretired + jobstudent + jobtechnician + maritalmarried + 
+    educationprimary + educationsecondary + balance + housingno + 
+    loanno + contactcellular + contacttelephone + day + monthapr + 
+    monthaug + monthfeb + monthjan + monthjul + monthjun + monthmar + 
+    monthmay + monthnov + duration + campaign + pdays + previous + 
+    poutcomesuccess, family = "binomial", data = train)
+
+# checking vif for logistic_2 
+vif(logistic_2)
+summary(logistic_2)
+
+# removing monthmay since vif is high
+logistic_3 <- glm(formula = response ~ jobadmin. + jobhousemaid + jobmanagement + 
+    jobretired + jobstudent + jobtechnician + maritalmarried + 
+    educationprimary + educationsecondary + balance + housingno + 
+    loanno + contactcellular + contacttelephone + day + monthapr + 
+    monthaug + monthfeb + monthjan + monthjul + monthjun + monthmar + 
+     + monthnov + duration + campaign + pdays + previous + 
+    poutcomesuccess, family = "binomial", data = train)
+
+summary(logistic_3)
+vif(logistic_3)
+
+# all vifs below 3 now, so removing variables based on significance level
+# removing jobhousemaid
+
+logistic_4 <- glm(formula = response ~ jobadmin. + jobmanagement + 
+    jobretired + jobstudent + jobtechnician + maritalmarried + 
+    educationprimary + educationsecondary + balance + housingno + 
+    loanno + contactcellular + contacttelephone + day + monthapr + 
+    monthaug + monthfeb + monthjan + monthjul + monthjun + monthmar + 
+     + monthnov + duration + campaign + pdays + previous + 
+    poutcomesuccess, family = "binomial", data = train)
+
+summary(logistic_4)
+vif(logistic_4) # vifs are all below 3 
+
+# removing monthapr, monthfeb, pdays, previous
+logistic_5 <- glm(formula = response ~ jobadmin. + jobmanagement + 
+    jobretired + jobstudent + jobtechnician + maritalmarried + 
+    educationprimary + educationsecondary + balance + housingno + 
+    loanno + contactcellular + contacttelephone + day + 
+    monthaug + monthjan + monthjul + monthjun + monthmar + 
+     + monthnov + duration + campaign  + 
+    poutcomesuccess, family = "binomial", data = train)
+
+summary(logistic_5)
+vif(logistic_5)
+
+#removing jobtechnician
+logistic_6 <- glm(formula = response ~ jobadmin. + jobmanagement + 
+    jobretired + jobstudent + maritalmarried + 
+    educationprimary + educationsecondary + balance + housingno + 
+    loanno + contactcellular + contacttelephone + day + 
+    monthaug + monthjan + monthjul + monthjun + monthmar + 
+     + monthnov + duration + campaign  + 
+    poutcomesuccess, family = "binomial", data = train)
+
+summary(logistic_6)
+
+# removing jobmanagement
+logistic_7 <- glm(formula = response ~ jobadmin. + 
+    jobretired + jobstudent + maritalmarried + 
+    educationprimary + educationsecondary + balance + housingno + 
+    loanno + contactcellular + contacttelephone + day + 
+    monthaug + monthjan + monthjul + monthjun + monthmar + 
+     + monthnov + duration + campaign  + 
+    poutcomesuccess, family = "binomial", data = train)
+
+summary(logistic_7)
+vif(logistic_7)
+
+
+logistic_8 <- glm(formula = response ~ jobadmin. + 
+    jobretired + jobstudent + maritalmarried + 
+    educationprimary + educationsecondary + balance + housingno + 
+    loanno + day + 
+    duration + campaign  + 
+    poutcomesuccess, family = "binomial", data = train)
+
+logistic_final <- logistic_8
+```
+
+We now have a logistic model named logistic_final. Next, we'll use the model to predict the response in the test data. 
+
+```{r}
+predictions_logit <- predict(logistic_final, newdata = test[, -55], type = "response")
+summary(predictions_logit)
+```
+
+So now we have predicted the 'probabilities of responding' (for the test data). Note that the average probability (as shown above in summary(predictions_logit) is 11.6%, which is the average response rate.   
+
+Next comes the interesting part. We need to convert the probabilities to an actual prediction, i.e. __yes or no__. Can we just say that anything _above 50% probability of response is yes and no otherwise_? Yes, we could, but we can do better.
+
+We can rather experiment with other __probability thresholds__ like 30%, 40% etc. We will go with whatever gives us the highest (loosely speaking) __accuracy__. In fact, apart from accuracy, there are other metrics to __evaluate the model__ like sensitivity, specificity etc.
+
+
+### Model Evaluation
+
+In model evaluation, we use the test data to evaluate how good the model is (note that it was trained on 'train data' and hasn't seen the test data, so we are not cheating). 
+
+Let us first look at how __accurate__ the predictions are. For now, let's use a probability cutoff of 50% and then we'll iterate. 
+
+```{r}
+predicted_response <- factor(ifelse(predictions_logit >= 0.50, "yes", "no"))
+conf <- confusionMatrix(predicted_response, test$response, positive = "yes")
+conf
+```
+
+Firstly, note that the __accuracy__ is approx. 90% which means that the model has made about 90% predictions correct (whether yes or no).  
+
+There are two other important metrics - __sensitivity__ and __specificity__. 
+
+__Sensitivity__ is the fraction of correctly identified responses, i.e. out of those who will actually respond, how many has the model identified. 
+
+__Specificity__ is the fraction of __incorrectly identified responses__, i.e. out of those who will actually NOT respond, how many has the model identified. 
+
+These two metrics can be calculated using the table of predictions as follows:
+```{r}
+sensitivity <- conf$byClass[1]
+specificity <- conf$byClass[2]
+sensitivity
+specificity
+```
+
+The values of sensitivity and specificity are about 31.75% and 97.72% respectively. This means that the model predicts 97.72% of those who will NOT buy correctly while only 31.75% of those who'll buy. 
+
+Since the number of "yes" responders are few (only 11% respond), it is hard to predict them. 
+So if you market the product to about 10,000 people, you know that about 1100 will respond. The model will identify about 31% or 350 of them correctly. 
+
+But these predictions are based on an arbitrary cut-off of 0.50 probability. Now that we know what accuracy, specificity and sensitivity mean, we can find a cutoff which optimises the most important metric. In our case, it is sensitivity. 
+
+
+```{r}
+library(ROCR)
+predictions_object <- prediction(predictions_logit, test$response)
+perf_object <- performance(predictions_object, "tpr", "fpr")
+plot(perf_object)
+```
+
+The plot shown above is called the __ROC__ curve. It has False Positive Rate (FPR) and True Positive Rate (TPR, or sensitivity) on the x and y axes respectively. 
+
+The objective is to __maximise the TPR__ and __minimise the FPR__ which means that we want the curve to be aligned towards the __top-left__. 
+
+Now, let's find oput the optimal probabilty cutoff, i.e. the value abpve which we'll predict "yes" and "no" otherwise. We can plot the three metrics against cutoff values ranging from 0% to 100% and choose the one which gives high accuracy, sensitivity and specificity. 
+
+```{r}
+perform_fn <- function(cutoff) 
+  {
+  predicted_response <- factor(ifelse(predictions_logit >= cutoff, "yes", "no"))
+  conf <- confusionMatrix(predicted_response, test$response, positive = "yes")
+  acc <- conf$overall[1]
+  sens <- conf$byClass[1]
+  spec <- conf$byClass[2]
+  out <- t(as.matrix(c(sens, spec, acc))) 
+  colnames(out) <- c("sensitivity", "specificity", "accuracy")
+  return(out)
+}
+
+# creating cutoff values from 0.01 to 0.99 for plotting and initialising a matrix of size 1000x4
+s = seq(.01,.99,length=100)
+OUT = matrix(0,100,3)
+
+# calculate the sens, spec and acc for different cutoff values
+for(i in 1:100)
+  {
+  OUT[i,] = perform_fn(s[i])
+} 
+  
+
+# plotting cutoffs 
+plot(s, OUT[,1],xlab="Cutoff",ylab="Value",cex.lab=1.5,cex.axis=1.5,ylim=c(0,1),type="l",lwd=2,axes=FALSE,col=2)
+axis(1,seq(0,1,length=5),seq(0,1,length=5),cex.lab=1.5)
+axis(2,seq(0,1,length=5),seq(0,1,length=5),cex.lab=1.5)
+lines(s,OUT[,2],col="darkgreen",lwd=2)
+lines(s,OUT[,3],col=4,lwd=2)
+box()
+legend(0,.50,col=c(2,"darkgreen",4,"darkred"),lwd=c(2,2,2,2),c("Sensitivity","Specificity","Accuracy"))
+```
+
+The plot above shows the sensitivity, specificity and accuracy for cutoff probabilities ranging from 0 to 100. It is clear that a cutoff around 12-13% will optimise the three metrics.
+
+ 
+```{r}
+cutoffs <- s[which(abs(OUT[, 1] - OUT[, 2]) < 0.01)]
+```
+
+Let's choose a cutoff value of 12% for the final model. 
+
+```{r}
+predicted_response <- factor(ifelse(predictions_logit >= 0.12, "yes", "no"))
+conf_final <- confusionMatrix(predicted_response, test$response, positive = "yes")
+acc <- conf_final$overall[1]
+sens <- conf_final$byClass[1]
+spec <- conf_final$byClass[2]
+acc
+sens
+spec
+```
+
+We have accuracy = 82.62%, sensitivity = 75.29% and specificity = 83.59%. This is a remarkable improvement over cutoff = 0.50, where the sensitivity was around 31% only. 
+
+Now, if you market the product to 10,000 people (out of which around 1100 usually respond), the model will be able to identify 75% of 1100 or approx. 825 people correctly. 
+
+
+## Model Deployment and Recommendations
+
+Now that we have a model which predicts the probability of response, we can arrive at
+some interesting recommendations. 
+
+Our objective is to reduce the marketing cost and get almost the same number of customers as before.
+
+The usual response rate is 11%, which means that if we telemarket to 10,000 people, 1100 will buy the product.
+
+We can rather telemarket to only thoso whose __probability of purchase is high__. Let's look at the probabilities of purchase. Note that we will use only test data for this analysis. 
+
+```{r}
+test$predicted_probs <- predictions_logit
+test$predicted_response <- predicted_response
+str(test)
+test_predictions <- test[, c("response", "predicted_probs", "predicted_response")]
+head(test_predictions)
+write.csv(test_predictions, file = "response_predictions.csv")
+```
+
+We have 13,564 observations in test data. Since we now have the probabilities of response, we can sort them and market only to those with high probabilities.
+
+### Reducing Customer Acquision Cost
+
+Let's assume that telemarketing to each person costs INR 1. In the test data, we have 13,564 observations, so the total cost is INR 13564.   
+Among these, about 11.7% respond, so we get 1587 customers for  INR 13564, or Rs 8.54 per customer.
+
+```{r}
+summary(test_predictions$response)
+```
+
+Let's sort the observations in decreasing order of probability. 
+
+```{r}
+test_predictions <- test_predictions[order(test_predictions$predicted_probs, decreasing = T), ]
+head(test_predictions)
+```
+
+Now if we market to, say, only 50% population (approx. 6800 people), then about 1500 will respond (see below). The response rate is improved to 22.6%, almost double of what you'll get by randomly marketing. The acquision cost comes down to Rs 4.5 per customer.
+
+```{r}
+summary(test_predictions$response[1:6800])
+1479/6800
+6800/1479
+```
+
+We can also visualise how the response rate varies with the marketing cost.
+
+```{r}
+seq_prospects <- seq(1, 5000, by = 1)
+cost_matrix <- matrix(0, length(seq_prospects), 3)
+for (i in seq_prospects)
+{
+  cost_matrix[i, 1] = i
+  response <- length(which(test_predictions$response[1:i] == "yes"))
+  cost_matrix[i, 2] = response/i
+  cost_matrix[i, 3] = response
+}
+colnames(cost_matrix) <- c("number of prospects targeted (marketing cost)", "response rate", "number of responses")
+head(cost_matrix)
+```
+
+The cost_matrix stores the number of prospects targeted, the response rates and the number of responses. The marketing cost is same as number of people targted since we've assumed Re 1 per call. 
+
+```{r}
+plot(cost_matrix[, 1], cost_matrix[,2]*100,xlab="Marketing Cost (INR)",ylab="Response Rate (%)",cex.lab=1.5,cex.axis=1.5, ylim=c(0,200),type="l",lwd=2,axes=TRUE,col=2)
+
+lines(seq_prospects, cost_matrix[, 3]/10, col="darkgreen",lwd=2)
+box()
+legend(0, 200,col=c(2,"darkgreen"),lwd=c(2,2),c("Response Rate","No.of Responses/10"))
+```
+
+The plot shows how the number of responses and the response rate varies with marketing cost (no. of prospects targeted). 
+
+You can see that for INR 3000, almost 1272 prospects are expected to respond. Earlier, about 1587 would respond at a cost of Rs 13500.  
+
+```{r}
+cost_matrix[3000:3010, ]
+1167/1587
+3000/13500
+```
+
+Thus, we can acquire __about 73% of the customers for only about 22% of the marketing cost.__  
+
