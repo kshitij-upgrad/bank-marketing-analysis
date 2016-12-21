@@ -10,6 +10,8 @@ output:
 # Bank Marketing Analysis
 #### Designing a Telemarketing Strategy To Reduce Acquisition Costs
 
+***
+
 A bank sells a product (called term deposit) to prospects mainly through telemarketing. If a prospect customer buys the product, we say that he has 'responded'. 
 
 The aim of this analysis is to __reduce the marketing cost by atleast 50%__ and acquire a comparable number of customers (say 80-90%). 
@@ -26,6 +28,7 @@ The standard process followed in analytics projects is:
 4. Model Evaluation
 5. Model Deployment and Recommendations
 
+***
 
 ## Business Understanding
 
@@ -34,6 +37,7 @@ The __overall goal__ is to reduce telemarketing costs by about 50% and acquire a
 
 The specific __objective of this analysis__ is to build a __'response model'__ to predict the likelihood of a prospect buying the product (or responding). 
 
+***
 
 ## Data Understanding
 
@@ -53,6 +57,7 @@ We have 45211 observations, i.e. we have data of 45211 potential customers. Ther
 
 The last attribute 'response' tells us whether the person had responded to the bank's marketing campaign. It thus contains only two values - Yes or No. It is called the __target attribute__ since that is what we want to predict using the other attributes.
 
+***
 
 ### Data Cleaning 
 #### Missing Values and Outliers
@@ -68,6 +73,8 @@ We have simply summed up all the missing values (denoted as 'NA'). There are non
 Next, we should ideally look at __outliers__ in the data. Outliers are extreme values for which treatment is done so that the data only represents the general trends and ignores extreme cases. For example, a person having an income of Rs 20 lacs per month will be an outlier in this dataset.
 
 For now, we will not do outlier treatment since this data doesn't have many of them.
+
+***
 
 ### Exploratory Analysis
 In Exploratory Data Analysis, or EDA, we use plots and summaries of data to understand the patterns in it. Let's see some examples. 
@@ -107,14 +114,14 @@ Let's now look at the summary of the target variable __response__.
 summary(bank_data$response)
 ```
 
-So out of about 45,000 people, only 5000 had responded. The exact __response rate__ ca calculated as:
+So out of about 45,000 people, only 5289 had responded. The exact __response rate__ can be calculated as:
 
 ```{r echo = FALSE}
 response_rate <- 5289/45211
 response_rate
 ```
 
-An 11.7% response rate means that if the you make 100 calls to market the product (term deposit), about 11.7% will subscribe for a term-deposit.  In marketing, 11.7% is a decently good rate.  
+An 11.7% response rate means that if the you make 100 calls to market the product (term deposit), about 11.7% will subscribe for a term-deposit.   
 
 #### Multivariate Analysis
 
@@ -138,7 +145,7 @@ Note that a new variable named _buckets.age_ is now added to bank_data. Ages are
 
 Let's use the buckets to see if age affects the response rate. 
 ```{r}
-ggplot(bank_data, aes(buckets.age, fill = factor(response))) + geom_bar()
+ggplot(bank_data, aes(buckets.age, fill = factor(response))) + geom_bar() + theme(axis.text.x = element_text(angle = 60, hjust = 1))
 ```
 
 It will be easier if we could see the response rate in numbers as well. We can convert the 'yes-no' values to '1-0' respectively and then calculate the response rate by summing up the 1s. 
@@ -152,46 +159,100 @@ We can now aggregate the 1s by each age bucket and see the response rates
 for each bucket. 
 
 ```{r}
-agg_age <- aggregate(response.numeric ~ buckets.age, data = bank_data, mean)
+agg_age <- merge(aggregate(response.numeric ~ buckets.age, bank_data, mean), 
+                 aggregate(response.numeric~buckets.age, bank_data, sum), 
+                 by = "buckets.age")
+
+colnames(agg_age) <- c("age", "response_rate", "count_prospects")
+agg_age$response_rate <- format(round(agg_age$response_rate, 2))
 agg_age
+ggplot(agg_age, aes(age, count_prospects, fill = response_rate, label = response_rate)) + geom_bar(stat = 'identity') + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + geom_text(size = 3, vjust = -0.5)
 ```
 
-Note that the bucket 10-20 has about 34% response rate; 20-30 has 16% etc. 
-The bucket 40-50 and 50-60 have low response rates (around 10%). 
+Note that although the bucket 10-20 has about 34% response rate, there are only a few prospects in that bucket (only 33, see code below) and thus we should ignore the bucket. 
 
-We can display the aggregate response rates in the plot as well. 
-
-```{r}
-ggplot(agg_age, aes(x = buckets.age, y = response.numeric)) + geom_bar(stat = 'identity')  
-```
-
+The buckets 20-30 has 16% response rate while 40-50 and 50-60 have low response ratesat around 10%.
 
 Similarly, we can measure the response rate with salary and jobs. 
 
 ```{r}
 bank_data$buckets.salary <- cut(bank_data$salary, breaks = 10)
-agg_salary <- aggregate(response.numeric ~ buckets.salary, data = bank_data, mean)
+agg_salary <- merge(aggregate(response.numeric ~ buckets.salary, data = bank_data, mean), 
+                    aggregate(response.numeric ~ buckets.salary, bank_data, sum),  
+                              by = "buckets.salary")
+
+colnames(agg_salary) <- c("salary", "response_rate", "count_prospects")
+agg_salary$response_rate <- format(round(agg_salary$response_rate, 2))
 agg_salary
-ggplot(agg_salary, aes(x = buckets.salary, y = response.numeric)) + geom_bar(stat = 'identity')  
+ggplot(agg_salary, aes(salary, count_prospects, fill = response_rate, label = response_rate)) + geom_bar(stat = 'identity') + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + geom_text(size = 3, vjust = -0.5)
 ```
 
-You can see that the response rate is highest for the lowest salary band. This might tell you something about the banking products you should be selling (which are used by people in this salary band.)
+You can see that the response rate is highest for the lowest salary band (19.96%) while it contains 505 prospects. This might tell you something about the banking products you should be selling (which are used by people in this salary band.)
+
+The number of prospects is highest in the fourth salary bucket at 2174 where the response rate is about 13.08% (higher than the average of 11.7%).  
 
 Let's also compare response rates across various jobs.  
 
 ```{r}
-agg_job <- aggregate(response.numeric~job, data = bank_data, mean)
+agg_job <- merge(aggregate(response.numeric~job, data = bank_data, mean), 
+                 aggregate(response.numeric~job, bank_data, sum), 
+                 by = "job")
+colnames(agg_job) <- c("job", "response_rate", "count_prospects")
+agg_job$response_rate <- format(round(agg_job$response_rate, 2))
 agg_job
-ggplot(agg_job, aes(job, response.numeric)) + geom_bar(stat = 'identity')
+ggplot(agg_job, aes(job, count_prospects, label = response_rate)) + geom_bar(stat = 'identity') + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + geom_text(size = 3, vjust = -0.5)
 ```
 
 Interestingly, response rate is highest for students and second highest for retired people. It is quite low for blue-collar workers, housemaids and entrepreneurs. 
 
-Similarly, you can analyse response rates with other variables like education, marital status, loan etc. 
+Similarly, you can analyse response rates with other variables like education, marital status, loan etc. The plots below show how response rate varies with education, marital status, contact method and monh of contact. 
 
-But this way, we can only only analyse the effect of each variable separately. We saw that multiple attributes like age, salary etc. affect the reponse rate. How do we analyse the _combined effect_ of the variables? Also, how can we know which variables affect response rate more than others? 
 
-__Machine Learning__ helps us build __models__ which extract the patterns in the data. We'll see that in the next section.
+```{r}
+agg_ed <- merge(aggregate(response.numeric~education, bank_data, mean), 
+                 aggregate(response.numeric~education, bank_data, sum), 
+                 by = "education")
+colnames(agg_ed) <- c("education", "response_rate", "count_prospects")
+agg_ed$response_rate <- format(round(agg_ed$response_rate, 2))
+agg_ed
+ggplot(agg_ed, aes(education, count_prospects, label = response_rate)) + geom_bar(stat = 'identity') + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + geom_text(size = 3, vjust = -0.5)
+
+plot_response <- function(cat_var, var_name){
+  a <- aggregate(response.numeric~cat_var, bank_data, mean)
+  b <- aggregate(response.numeric~cat_var, bank_data, sum)
+
+  colnames(a)[1] <- var_name
+  colnames(b)[1] <- var_name
+  agg_response <- merge(a, b, by = var_name)
+  
+  
+  colnames(agg_response) <- c(var_name, "response_rate","count")
+  agg_response[, 2] <- format(round(agg_response[, 2], 2))
+ 
+  ggplot(agg_response, aes(agg_response[, 1], count, label = response_rate)) + geom_bar(stat = 'identity') + theme(axis.text.x = element_text(angle = 60, hjust = 1)) + geom_text(size = 3, vjust = -0.5) + xlab(var_name)
+  #  
+  # return(agg_response)
+  }
+
+plot_response(bank_data$education, "education")
+plot_response(bank_data$marital, "marital status")
+plot_response(bank_data$contact, "contact method")
+plot_response(bank_data$month, "month of contact")
+```
+
+* From the plots shown above, we can draw the following observations:
+  + __Education__: Response rate is only 9% for primary education, 11% for secondary and 15% for tertiary; implying that education clearly plays a crucial role in predicting response
+  + __ Marital Status__: Response rate is 15% for single prospects and 10% for married
+  + __Contact method__: Response rate is 15% and 13% for cellular and telephonic contact methods, respectively
+  + __Month of contact__: Interestingly, response rate varies drastically with month of contact; it is 52% in March, 47% in December and only 7% in May
+
+We now have a decent understanding of the variable which are important in predicting response. 
+
+But this way, we can only only analyse the effect of each variable separately. We saw that multiple attributes like month of contact, marital status etc. affect the reponse rate. How do we analyse the _combined effect_ of the variables? Also, how can we know which variables affect response rate more than others? 
+
+This is why we need machine learning __models__. We'll see that in the next section.
+
+***
 
 ## Modelling
 
@@ -202,6 +263,8 @@ To build machine learning models, we use only a part of the data to train the mo
 Rest of the data is used to test or evaluate the model, which is called __test data__. 
 
 We'll use 70% data to train the model and the rest 30% to test it. 
+
+***
 
 ### Data Preparation
 
@@ -227,7 +290,9 @@ nrow(train)/nrow(bank_data)
 nrow(test)/nrow(bank_data)
 ```
 
-### Logistic Regression
+***
+
+### Model 1: Logistic Regression
 
 Let's build the first model - __logistic regression__. 
 
@@ -312,18 +377,12 @@ logistic_7 <- glm(formula = response ~ jobadmin. +
 summary(logistic_7)
 vif(logistic_7)
 
-
-logistic_8 <- glm(formula = response ~ jobadmin. + 
-    jobretired + jobstudent + maritalmarried + 
-    educationprimary + educationsecondary + balance + housingno + 
-    loanno + day + 
-    duration + campaign  + 
-    poutcomesuccess, family = "binomial", data = train)
-
-logistic_final <- logistic_8
+logistic_final <- logistic_7
 ```
 
-We now have a logistic model named logistic_final. Next, we'll use the model to predict the response in the test data. 
+We now have a logistic model named logistic_final. The variables in the final model can be seen above, like job, education, balance, housing, contact method, month of contact etc.  
+
+Next, we'll use the model to predict the response in the test data. 
 
 ```{r}
 predictions_logit <- predict(logistic_final, newdata = test[, -55], type = "response")
@@ -444,6 +503,137 @@ We have accuracy = 82.62%, sensitivity = 75.29% and specificity = 83.59%. This i
 
 Now, if you market the product to 10,000 people (out of which around 1100 usually respond), the model will be able to identify 75% of 1100 or approx. 825 people correctly. 
 
+### Model 2: Decision Tree
+
+Let's build a decision tree and compare that with the logistic regression model. 
+
+```{r}
+library(rpart)
+library(rattle)
+bank <- read.csv("bank-marketing.csv")
+split_indices <- sample.split(bank$response, SplitRatio = 0.70)
+train_dt <- bank[split_indices, ]
+test_dt <- bank[!split_indices, ]
+nrow(train_dt)/nrow(bank)
+nrow(test_dt)/nrow(bank)
+
+# building a tree with arbitrary minsplit and cp
+banktree_1 <-  rpart(response ~ ., data=train_dt, method= "class", 
+                     control=rpart.control(minsplit=65, cp=0.001))
+plot(banktree_1)
+
+# This is clearly an overfitted tree
+
+# Increasing the minsplit two fold to 130 
+banktree_2 <-  rpart(response ~ ., data=train_dt, method= "class",
+                     control=rpart.control(minsplit=130, cp=0.001))
+plot(banktree_2)
+
+# This one is better, but still looks a little too complex
+fancyRpartPlot(banktree_2)
+
+# Listing the variables by importance: Duration, poutcome, month are the top 3
+banktree_2$variable.importance
+
+# We can further simplify the tree by increasing minsplit
+banktree_3 <-  rpart(response ~ ., data=train_dt, method= "class",
+                     control=rpart.control(minsplit=400, cp=0.001))
+
+banktree_3$variable.importance
+fancyRpartPlot(banktree_3)
+
+# banktree_3 looks like an acceptable model; contains 
+banktree_4 <- rpart(response ~ ., data=train_dt, method= "class",
+                     control=rpart.control(minsplit=800, cp=0.001))
+fancyRpartPlot(banktree_4)
+banktree_4$variable.importance
+
+
+# We'll evaluate banktree _3 and banktree_4 using cross validation and choose the optimal value of cp parameter 
+# The xerror is the average error measured during cross validation. The cp value for which the xerror is minimum is our ideal choice for the cp parameter.
+# cp = 0.0024 minimises the xerror
+printcp(banktree_3)
+banktree_3 <- rpart(response ~ ., data=train_dt, method= "class",
+                     control=rpart.control(minsplit=400, cp=0.0024))
+
+fancyRpartPlot(banktree_3)
+
+
+# find optimal cp for banktree 4
+printcp(banktree_4)
+banktree_4 <- rpart(response ~ ., data=train_dt, method= "class",
+                     control=rpart.control(minsplit=400, cp=0.001))
+fancyRpartPlot(banktree_4)
+banktree_4$variable.importance
+
+## Model Evaluation for banktree_3 and banktree_4
+# using test data from now on
+# banktree_3
+banktree_3_pred <- predict(banktree_3, test_dt[, -19], type = "class")
+confusionMatrix(banktree_3_pred, test_dt[, 19], positive = "yes")
+
+# Accuracy is 90.14%, sensitivity is only 42.91%
+
+# banktree_4
+banktree_4_pred <- predict(banktree_4, test_dt[, -19], type = "class")
+confusionMatrix(banktree_4_pred, test_dt[, 19], positive = "yes")
+
+# Sensitivity is only about 42%; we can improve the model quite a bit since logistic model has sensitivtiy around 75%
+
+
+# Model 3: Random forest
+library(randomForest)
+split_indices <- sample.split(bank$response, SplitRatio = 0.70)
+train_rf <- bank[split_indices, ]
+test_rf <- bank[!split_indices, ]
+nrow(train_rf)/nrow(bank)
+nrow(test_rf)/nrow(bank)
+
+bank_rf <- randomForest(response ~., data = train_rf, proximity = F, do.trace = T, mtry = 5)
+rf_pred <- predict(bank_rf, test_rf[, -19], type = "prob")
+
+
+perform_fn_rf <- function(cutoff) 
+  {
+  predicted_response <- factor(ifelse(rf_pred[, 2] >= cutoff, "yes", "no"))
+  conf <- confusionMatrix(predicted_response, test_rf$response, positive = "yes")
+  acc <- conf$overall[1]
+  sens <- conf$byClass[1]
+  spec <- conf$byClass[2]
+  out <- t(as.matrix(c(sens, spec, acc))) 
+  colnames(out) <- c("sensitivity", "specificity", "accuracy")
+  return(out)
+}
+
+# creating cutoff values from 0.01 to 0.99 for plotting and initialising a matrix of size 1000x4
+s = seq(.01,.99,length=100)
+OUT = matrix(0,100,3)
+
+# calculate the sens, spec and acc for different cutoff values
+for(i in 1:100)
+  {
+  OUT[i,] = perform_fn_rf(s[i])
+} 
+
+
+# plotting cutoffs 
+plot(s, OUT[,1],xlab="Cutoff",ylab="Value",cex.lab=1.5,cex.axis=1.5,ylim=c(0,1),type="l",lwd=2,axes=FALSE,col=2)
+axis(1,seq(0,1,length=5),seq(0,1,length=5),cex.lab=1.5)
+axis(2,seq(0,1,length=5),seq(0,1,length=5),cex.lab=1.5)
+lines(s,OUT[,2],col="darkgreen",lwd=2)
+lines(s,OUT[,3],col=4,lwd=2)
+box()
+legend(0,.50,col=c(2,"darkgreen",4,"darkred"),lwd=c(2,2,2,2),c("Sensitivity","Specificity","Accuracy"))
+
+# the plot shows that cutoff value of around 22% optimises sensitivity and accuracy
+predicted_response_22 <- factor(ifelse(rf_pred[, 2] >= 0.22, "yes", "no"))
+confusionMatrix(predicted_response_22, test_rf[, 19], positive = "yes")
+
+# Final RF important variables
+importance <- bank_rf$importance  
+```
+
+We'll choose the __Random Forest__ as the final model. The top 5 important variables are duration, month, balance, age and day.   
 
 ## Model Deployment and Recommendations
 
@@ -457,12 +647,12 @@ The usual response rate is 11%, which means that if we telemarket to 10,000 peop
 We can rather telemarket to only thoso whose __probability of purchase is high__. Let's look at the probabilities of purchase. Note that we will use only test data for this analysis. 
 
 ```{r}
-test$predicted_probs <- predictions_logit
-test$predicted_response <- predicted_response
-str(test)
-test_predictions <- test[, c("response", "predicted_probs", "predicted_response")]
-head(test_predictions)
-write.csv(test_predictions, file = "response_predictions.csv")
+test_rf$predicted_probs <- rf_pred[, 2]
+test_rf$predicted_response <- predicted_response_22
+
+test_predictions_rf <- test_rf[, c("response", "predicted_probs", "predicted_response")]
+head(test_predictions_rf)
+write.csv(test_predictions_rf, file = "response_predictions_rf.csv")
 ```
 
 We have 13,564 observations in test data. Since we now have the probabilities of response, we can sort them and market only to those with high probabilities.
@@ -473,22 +663,22 @@ Let's assume that telemarketing to each person costs INR 1. In the test data, we
 Among these, about 11.7% respond, so we get 1587 customers for  INR 13564, or Rs 8.54 per customer.
 
 ```{r}
-summary(test_predictions$response)
+summary(test_predictions_rf$response)
 ```
 
 Let's sort the observations in decreasing order of probability. 
 
 ```{r}
-test_predictions <- test_predictions[order(test_predictions$predicted_probs, decreasing = T), ]
-head(test_predictions)
+test_predictions_rf <- test_predictions_rf[order(test_predictions_rf$predicted_probs, decreasing = T), ]
+head(test_predictions_rf)
 ```
 
-Now if we market to, say, only 50% population (approx. 6800 people), then about 1500 will respond (see below). The response rate is improved to 22.6%, almost double of what you'll get by randomly marketing. The acquision cost comes down to Rs 4.5 per customer.
+Now if we market to, say, only 50% population (approx. 6800 people), then about 1576 will respond (see below). The response rate is improved to 23.1%, almost double of what you'll get by randomly marketing. The acquision cost comes down to Rs 4.31 per customer.
 
 ```{r}
-summary(test_predictions$response[1:6800])
-1479/6800
-6800/1479
+summary(test_predictions_rf$response[1:6800])
+1576/6800
+6800/1576
 ```
 
 We can also visualise how the response rate varies with the marketing cost.
@@ -499,7 +689,7 @@ cost_matrix <- matrix(0, length(seq_prospects), 3)
 for (i in seq_prospects)
 {
   cost_matrix[i, 1] = i
-  response <- length(which(test_predictions$response[1:i] == "yes"))
+  response <- length(which(test_predictions_rf$response[1:i] == "yes"))
   cost_matrix[i, 2] = response/i
   cost_matrix[i, 3] = response
 }
@@ -519,13 +709,13 @@ legend(0, 200,col=c(2,"darkgreen"),lwd=c(2,2),c("Response Rate","No.of Responses
 
 The plot shows how the number of responses and the response rate varies with marketing cost (no. of prospects targeted). 
 
-You can see that for INR 3000, almost 1272 prospects are expected to respond. Earlier, about 1587 would respond at a cost of Rs 13500.  
+You can see that for INR 3000, almost 1379 prospects are expected to respond. Earlier, about 1587 would respond at a cost of Rs 13500.  
 
 ```{r}
 cost_matrix[3000:3010, ]
-1167/1587
+1379/1587
 3000/13500
 ```
 
-Thus, we can acquire __about 73% of the customers for only about 22% of the marketing cost.__  
+Thus, we can acquire __about 86% of the customers for only about 22% of the marketing cost.__  
 
