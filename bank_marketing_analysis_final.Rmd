@@ -296,7 +296,7 @@ nrow(test)/nrow(bank_data)
 
 Let's build the first model - __logistic regression__. 
 
-```{r}
+```{r logistic}
 library(MASS)
 library(car)
 logistic_1 <- glm(response ~ ., family = "binomial", data = train)
@@ -311,7 +311,9 @@ logistic_2 <- glm(formula = response ~ jobadmin. + jobhousemaid + jobmanagement 
     monthaug + monthfeb + monthjan + monthjul + monthjun + monthmar + 
     monthmay + monthnov + duration + campaign + pdays + previous + 
     poutcomesuccess, family = "binomial", data = train)
+```
 
+```{r, echo = FALSE}
 # checking vif for logistic_2 
 vif(logistic_2)
 summary(logistic_2)
@@ -488,7 +490,7 @@ cutoffs <- s[which(abs(OUT[, 1] - OUT[, 2]) < 0.01)]
 
 Let's choose a cutoff value of 12% for the final model. 
 
-```{r}
+```{r, echo=F}
 predicted_response <- factor(ifelse(predictions_logit >= 0.12, "yes", "no"))
 conf_final <- confusionMatrix(predicted_response, test$response, positive = "yes")
 acc <- conf_final$overall[1]
